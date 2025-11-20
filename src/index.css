@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/* Global Styles */
+body {
+  margin: 0;
+  background-color: #050505;
+  color: white;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  /* Prevent scrollbars */
+}
+
+/* 3D Perspective for Login */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-5px);
+  }
+
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+.animate-shake {
+  animation: shake 0.3s ease-in-out;
+}
+
+/* Liquid Glass Class */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+}
+
+/* Neon Ring Animation - Fixed */
+.neon-ring {
+  position: relative;
+  /* overflow: hidden; Removed to allow glow to spread if needed, but kept contained by border-radius usually */
+}
+
+.neon-ring>* {
+  position: relative;
+  z-index: 10;
+  /* Ensure content is above the glow */
+}
+
+.neon-ring::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 2px;
+  /* Border width */
+  background: linear-gradient(45deg, transparent, #00ffcc, transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.8;
+  box-shadow: 0 0 15px #00ffcc;
+  animation: pulse-glow 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+  /* Behind content */
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    opacity: 0.5;
+    box-shadow: 0 0 10px #00ffcc;
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 20px #00ffcc, 0 0 10px cyan;
+  }
+}
+
+/* Leaflet Customization */
+.leaflet-container {
+  background: #050505 !important;
+}
+
+.plane-marker {
+  filter: drop-shadow(0 0 10px cyan);
+  transition: transform 1s linear;
+}
+
+/* Glass Popup Styles - Holographic Rainbow */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(0, 255, 204, 0.1) 25%,
+      rgba(0, 150, 255, 0.1) 50%,
+      rgba(150, 0, 255, 0.1) 75%,
+      rgba(255, 255, 255, 0.05) 100%) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+  color: white !important;
+  border-radius: 20px !important;
+  animation: popup-scale-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  /* Smooth spring animation */
+}
+
+/* Hide the default tip to make it look more like a floating card */
+.leaflet-popup-tip-container {
+  display: none;
+}
+
+@keyframes popup-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  width: 320px !important;
+}
+
+.leaflet-popup-close-button {
+  color: rgba(255, 255, 255, 0.7) !important;
+  font-size: 24px !important;
+  top: 12px !important;
+  right: 12px !important;
+  transition: all 0.2s ease;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #00ffcc !important;
+  transform: rotate(90deg);
+}
+
+/* Live Radar Blinking Dot */
+.live-indicator {
+  width: 8px;
+  height: 8px;
+  background-color: #00ffcc;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #00ffcc;
+  animation: blink-live 1.5s ease-in-out infinite;
+}
+
+@keyframes blink-live {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 15px #00ffcc;
+  }
+
+  50% {
+    opacity: 0.2;
+    transform: scale(0.8);
+    box-shadow: 0 0 0 transparent;
+  }
+}
