@@ -75,7 +75,7 @@ const LoginPage = ({ onLogin }) => {
                     style={{ transform: "translateZ(50px)" }}
                 >
                     <div className="inline-block p-4 rounded-full bg-white/5 backdrop-blur-md border border-white/10 mb-4 shadow-[0_0_30px_rgba(0,255,204,0.2)]">
-                        <img src="/logo.png" alt="NITPLANE Logo" className="w-12 h-12 object-contain drop-shadow-[0_0_10px_cyan]" />
+                        <img src={`/logo.png?v=${Date.now()}`} alt="NITPLANE Logo" className="w-12 h-12 object-contain drop-shadow-[0_0_10px_cyan]" />
                     </div>
                     <h1 className="text-4xl font-bold text-white tracking-[0.2em] mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
                         NITPLANE

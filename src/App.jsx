@@ -42,7 +42,7 @@ const userIcon = new L.DivIcon({
 
 // Sound Setup (Placeholders - will fail gracefully if files missing)
 const alertSound = new Howl({ src: ['/alert.mp3'], volume: 0.5 });
-const bgMusic = new Howl({ src: ['/websound.mp3'], loop: true, volume: 0.3 });
+const bgMusic = new Howl({ src: ['/websound.mp3'], loop: true, volume: 0.1 });
 
 import LoginPage from './LoginPage';
 
@@ -54,19 +54,25 @@ function App() {
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [isSimulation, setIsSimulation] = useState(false);
 
-  // 1. Get Location
+  // 1. Get Location (Auto-update every 5 mins)
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        setUserLoc([pos.coords.latitude, pos.coords.longitude]);
-      }, (err) => {
-        console.error("Error getting location:", err);
-        // Default to New Delhi if location fails
-        setUserLoc([28.6139, 77.2090]);
-      });
-    } else {
-      setUserLoc([28.6139, 77.2090]);
-    }
+    const getLocation = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          setUserLoc([pos.coords.latitude, pos.coords.longitude]);
+        }, (err) => {
+          console.error("Error getting location:", err);
+          // Only set default if we don't have a location yet
+          setUserLoc(prev => prev || [28.6139, 77.2090]);
+        });
+      } else {
+        setUserLoc(prev => prev || [28.6139, 77.2090]);
+      }
+    };
+
+    getLocation();
+    const interval = setInterval(getLocation, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
   }, []);
 
 
@@ -76,15 +82,9 @@ function App() {
     if (!userLoc) return;
 
     const [lat, lng] = userLoc;
-    // Bounding box ~100km radius (approx 1 degree)
-    const lamin = lat - 1;
-    const lomin = lng - 1;
-    const lamax = lat + 1;
-    const lomax = lng + 1;
-
     try {
-      // Attempt to fetch live data
-      const response = await fetch(`https://opensky-network.org/api/states/all?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`);
+      // Attempt to fetch live data (GLOBAL - no bounding box)
+      const response = await fetch(`https://opensky-network.org/api/states/all`);
 
       if (!response.ok) {
         throw new Error(`API Error: ${response.status}`);
@@ -93,18 +93,18 @@ function App() {
       const data = await response.json();
 
       if (!data.states || data.states.length === 0) {
-        throw new Error("No live flights found nearby");
+        throw new Error("No live flights found");
       }
 
-      // Map OpenSky Data
-      const newFlights = data.states.map(state => ({
+      // Map OpenSky Data (Limit to 100 to prevent crash)
+      const newFlights = data.states.slice(0, 100).map(state => ({
         id: state[0],
         callsign: state[1].trim() || "N/A",
         origin_country: state[2],
         lng: state[5],
         lat: state[6],
-        speed: Math.round(state[9] * 3.6) + " km/h",
-        heading: state[10],
+        speed: state[9] || 200, // m/s
+        heading: state[10] || 0,
         to: "Unknown",
         from: state[2].toUpperCase(),
         airline: "Unknown"
@@ -117,50 +117,63 @@ function App() {
       console.warn("Switching to Simulation Mode:", error.message);
       setIsSimulation(true);
 
-      // Generate multiple mock flights for better effect
-      const mockFlights = [
-        {
-          id: "SIM001",
-          callsign: "IGO605", // IndiGo
-          lat: lat + 0.02,
-          lng: lng + 0.02,
-          speed: "800 km/h",
-          to: "DELHI",
-          from: "MUMBAI",
-          airline: "IndiGo",
-          heading: 45
-        },
-        {
-          id: "SIM002",
-          callsign: "AIC402", // Air India
-          lat: lat - 0.03,
-          lng: lng - 0.01,
-          speed: "750 km/h",
-          to: "LONDON",
-          from: "DELHI",
-          airline: "Air India",
-          heading: 120
-        },
-        {
-          id: "SIM003",
-          callsign: "SEJ123", // SpiceJet
-          lat: lat + 0.01,
-          lng: lng - 0.04,
-          speed: "600 km/h",
-          to: "DUBAI",
-          from: "JAIPUR",
-          airline: "SpiceJet",
-          heading: 270
-        }
-      ];
-      setFlights(mockFlights);
+      // Generate random mock flights if we don't have any yet or if we want to refresh
+      if (flights.length < 5) {
+        const generateMockFlight = (i) => {
+          const angle = Math.random() * 360;
+          const dist = Math.random() * 0.5; // random distance
+          return {
+            id: `SIM${Date.now()}-${i}`,
+            callsign: ["IGO", "AIC", "SEJ", "VTI", "BAW", "UAE"][Math.floor(Math.random() * 6)] + Math.floor(Math.random() * 900 + 100),
+            lat: lat + (Math.random() - 0.5),
+            lng: lng + (Math.random() - 0.5),
+            speed: 200 + Math.random() * 100, // m/s
+            heading: Math.random() * 360,
+            to: ["DELHI", "MUMBAI", "LONDON", "DUBAI", "NEW YORK"][Math.floor(Math.random() * 5)],
+            from: ["CHENNAI", "KOLKATA", "PARIS", "TOKYO", "SINGAPORE"][Math.floor(Math.random() * 5)],
+            airline: "Simulated Air"
+          };
+        };
+
+        const mocks = Array.from({ length: 15 }, (_, i) => generateMockFlight(i));
+        setFlights(mocks);
+      }
     }
   };
 
+  // 3. Real-time Movement Physics Loop (DISABLED FOR STABILITY)
+  /*
+  useEffect(() => {
+    if (!isStarted || flights.length === 0) return;
+
+    const interval = setInterval(() => {
+      setFlights(currentFlights =>
+        currentFlights.map(flight => {
+          // Move flight based on heading and speed
+          // Simple approximation: 1 degree lat ~ 111km
+          // Speed is in m/s. Let's scale it for visual effect.
+          // 0.00001 degrees per tick is roughly walking speed, so we need more.
+          const speedFactor = 0.00005; // Adjust for visual speed
+          const rad = flight.heading * (Math.PI / 180);
+
+          return {
+            ...flight,
+            lat: flight.lat + (Math.cos(rad) * speedFactor),
+            lng: flight.lng + (Math.sin(rad) * speedFactor)
+          };
+        })
+      );
+    }, 100); // 10fps update for better performance
+
+    return () => clearInterval(interval);
+  }, [isStarted, flights.length]);
+  */
+
+  // Poll for new data less frequently to avoid overwriting smooth movement too often
   useEffect(() => {
     if (isStarted && userLoc) {
       fetchFlights(); // Initial fetch
-      const interval = setInterval(fetchFlights, 10000); // Every 10 seconds
+      const interval = setInterval(fetchFlights, 30000); // Every 30 seconds
       return () => clearInterval(interval);
     }
   }, [isStarted, userLoc]);
@@ -186,26 +199,12 @@ function App() {
   };
 
   if (!isLoggedIn) {
-    return <LoginPage onLogin={() => setIsLoggedIn(true)} />;
+    return <LoginPage onLogin={() => {
+      setIsLoggedIn(true);
+      startApp();
+    }} />;
   }
 
-  if (!isStarted) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-black text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')] bg-cover bg-center opacity-20 blur-sm"></div>
-        <div className="z-10 flex flex-col items-center">
-          <h1 className="text-6xl md:text-8xl font-bold mb-4 tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-500">NITPLANE</h1>
-          <p className="text-xl text-gray-400 mb-8 tracking-widest">AIRPORT TRAFFIC CONTROLLER</p>
-          <button
-            onClick={startApp}
-            className="glass-card px-12 py-6 text-xl font-bold hover:bg-white/10 transition-all neon-ring relative overflow-hidden group"
-          >
-            <span className="relative z-10 group-hover:text-cyan-300 transition-colors">INITIALIZE RADAR</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // Helper to get logo URL based on callsign
   const getAirlineLogo = (callsign) => {
@@ -268,7 +267,7 @@ function App() {
 
         {userLoc && <Marker position={userLoc} icon={userIcon} />}
 
-        {flights.map((flight) => (
+        {flights.filter(f => f.lat && f.lng && !isNaN(f.lat) && !isNaN(f.lng)).map((flight) => (
           <React.Fragment key={flight.id}>
             <Marker
               position={[flight.lat, flight.lng]}
@@ -309,7 +308,7 @@ function App() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-gray-500 text-[10px] tracking-widest">SPEED</p>
-                      <p className="font-mono text-sm text-cyan-400">{flight.speed}</p>
+                      <p className="font-mono text-sm text-cyan-400">{Math.round(flight.speed * 3.6)} km/h</p>
                     </div>
                     <div className="space-y-1 text-right">
                       <p className="text-gray-500 text-[10px] tracking-widest">ETA</p>
