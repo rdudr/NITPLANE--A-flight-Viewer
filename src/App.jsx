@@ -47,10 +47,15 @@ const bgMusic = new Howl({ src: ['/websound.mp3'], loop: true, volume: 0.1 });
 import LoginPage from './LoginPage';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isStarted, setIsStarted] = useState(false);
+  // Initialize state from localStorage
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem('nitplane_login') === 'true';
+  });
+  const [isStarted, setIsStarted] = useState(() => {
+    return localStorage.getItem('nitplane_login') === 'true';
+  });
   const [flights, setFlights] = useState([]);
-  const [userLoc, setUserLoc] = useState(null);
+  const [userLoc, setUserLoc] = useState([28.6139, 77.2090]); // Default to New Delhi
   const [selectedFlight, setSelectedFlight] = useState(null);
   const [isSimulation, setIsSimulation] = useState(false);
 
@@ -62,17 +67,23 @@ function App() {
           setUserLoc([pos.coords.latitude, pos.coords.longitude]);
         }, (err) => {
           console.error("Error getting location:", err);
-          // Only set default if we don't have a location yet
-          setUserLoc(prev => prev || [28.6139, 77.2090]);
+          // Keep the default location if geolocation fails
         });
       } else {
-        setUserLoc(prev => prev || [28.6139, 77.2090]);
+        // Browser doesn't support geolocation, keep default
       }
     };
 
     getLocation();
     const interval = setInterval(getLocation, 5 * 60 * 1000); // 5 minutes
     return () => clearInterval(interval);
+  }, []);
+
+  // Auto-play music if restored from session
+  useEffect(() => {
+    if (isStarted) {
+      bgMusic.play();
+    }
   }, []);
 
 
@@ -96,19 +107,44 @@ function App() {
         throw new Error("No live flights found");
       }
 
-      // Map OpenSky Data (Limit to 100 to prevent crash)
-      const newFlights = data.states.slice(0, 100).map(state => ({
-        id: state[0],
-        callsign: state[1].trim() || "N/A",
-        origin_country: state[2],
-        lng: state[5],
-        lat: state[6],
-        speed: state[9] || 200, // m/s
-        heading: state[10] || 0,
-        to: "Unknown",
-        from: state[2].toUpperCase(),
-        airline: "Unknown"
-      }));
+      // Map OpenSky Data and calculate distance from user
+      const flightsWithDistance = data.states
+        .filter(state => state[5] && state[6]) // Filter out flights without valid coordinates
+        .map(state => {
+          const flightLat = state[6];
+          const flightLng = state[5];
+          const distance = getDistanceFromLatLonInKm(lat, lng, flightLat, flightLng);
+
+          return {
+            id: state[0],
+            callsign: state[1].trim() || "N/A",
+            origin_country: state[2],
+            lng: flightLng,
+            lat: flightLat,
+            speed: state[9] || 200, // m/s
+            heading: state[10] || 0,
+            to: "Unknown",
+            from: state[2].toUpperCase(),
+            airline: "Unknown",
+            distance: distance // Add distance for sorting
+          };
+        });
+
+      // Sort flights: nearby (within 300km) first, then by distance
+      const sortedFlights = flightsWithDistance.sort((a, b) => {
+        const aNearby = a.distance <= 300;
+        const bNearby = b.distance <= 300;
+
+        // If both are nearby or both are far, sort by distance
+        if (aNearby === bNearby) {
+          return a.distance - b.distance;
+        }
+        // Prioritize nearby flights
+        return aNearby ? -1 : 1;
+      });
+
+      // Take top 100 flights after sorting
+      const newFlights = sortedFlights.slice(0, 100);
 
       setFlights(newFlights);
       setIsSimulation(false);
@@ -176,7 +212,7 @@ function App() {
       const interval = setInterval(fetchFlights, 30000); // Every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [isStarted, userLoc]);
+  }, [isStarted]); // Only depend on isStarted to avoid creating multiple intervals
 
   // Haversine Formula for distance
   function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
@@ -201,6 +237,7 @@ function App() {
   if (!isLoggedIn) {
     return <LoginPage onLogin={() => {
       setIsLoggedIn(true);
+      localStorage.setItem('nitplane_login', 'true');
       startApp();
     }} />;
   }
